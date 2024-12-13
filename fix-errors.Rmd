@@ -1,0 +1,122 @@
+---
+title: "HW5 Part 1: Practice functions and debugging code"
+author: "Sophie Ennis"
+output: github_document
+---
+
+## Overview
+
+This script includes code to analyze the popularity of baby name in the United States using the `babynames` package (data info: http://hadley.github.io/babynames/). 
+
+This package has three datasets provided by the US government. Only the first two will be will be used for this assignment:
+* `babynames`
+* `applicants` 
+* `lifetables`
+
+This script has some bugs and currently does not work. Your task is to fix these mistakes to generate the desired output.
+
+
+## Load necessary libraries 
+
+If you are working on your local R Studio, you might need to install the libraries before loading them. If you are working on Workbench, simply run the code below to load the libraries, no installation required.
+
+```{r}
+library(tidyverse)
+library(babynames)
+```
+
+Check data (modify this code as you prefer)
+```{r}
+glimpse(babynames)
+glimpse(applicants)
+str(babynames)
+str(applicants)
+```
+
+### QUESTION 1. The code below uses the  `applicants` data to generate a line plot that displays the total US births by sex and year. The code contains TWO errors. Find and fix them. In a few sentences, explain why each of the errors occurred.
+
+```{r}
+#fixed
+applicants %>%
+  mutate( 
+    sex = if_else(sex == "F", "Female", "Male"), 
+  ) %>%
+  ggplot(mapping = aes(x = year, y = n_all, color = sex)) + 
+  geom_line() +
+  labs(
+    title = "Total US births by sex and year",
+    x = "Year",
+    y = "Number of births",
+    caption = "Source: Social Security Administration"
+  ) +
+  theme_minimal()
+```
+
+While using if_else(), we don't want to set "F" equal to sex, we want to assign sex to be "Female" when sex is "F". This is why we use two `==` and not one `=`. When we're assigning a variable to the color in ggplot graphs, we want ggplot to read the variable as a column name. When we use quotations around the variable, ggplot reads the variable as a literal color and instead of differentiating observations within the column with different colors, it will set them all as the same color. That is why we don't use quotations around the variable when we want to differentiate between observations. 
+
+### QUESTION 2. The code below calculates the mean for all variables in the `applicants` dataframe using a `for loop`. The code contains TWO errors and shows ONE warning; refer to slides and readings for the difference between errors and warnings. Find and fix them (different approaches are possible here, especially for the warning). In a few sentences, describe why each problem occurred.
+
+```{r}
+#fixed
+output <- vector(mode = "double" , length = length(applicants))
+output
+
+for (i in seq_along(applicants)) { 
+  if (is.numeric(applicants[[i]])) {
+    output[i] <- mean(applicants[[i]], na.rm = TRUE)
+  }
+  else {
+    output[i] <- "variable is not numeric"
+  }}
+output
+```
+The two errors were that the for loop was looping over the elements rather than the indices so the for loop was trying to iterate over the variables rather than the values and throwing an error. I added `seq_along()` and double brackets to remedy this. The warning was caused by one of the columns not having numeric values, returning that one of the arguments is not numeric or logical and returning NA. To remedy this I added conditional statements having the for loop evaluate the mean only when the argument was numeric and otherwise returning that the variable is not numeric.
+
+### QUESTION 3. The code below defines a function to create a bar plot with the total count of observations for a given variable in the dataset `babynames`. Specifically, it shows the total number of births by sex and the total number of births by year. The code contains THREE errors. Find and fix them. In a few sentences, describe why each problem occurred.
+
+```{r}
+#fixed
+summarize_and_plot <- function(df, column) {
+  summary_data <- df %>%
+    group_by({{ column }}) %>% 
+    summarise(total_births = sum(n)) 
+  ggplot(summary_data, aes(x = {{ column }}, y = total_births)) +
+    geom_bar(stat = "identity") +
+    scale_y_continuous(labels = scales::comma) +
+    theme_minimal()
+}
+# call the function first by sex, then by year
+summarize_and_plot(babynames, sex)
+summarize_and_plot(babynames, year)
+```
+The `column` inside the `group_by()` wasn't inside the curly brackets so instead of the function looking at the variables inside the columns it was looking at a variable called column. In the `summarize` line the sum needs to be taken of n instead of just `sum()` because there was no data being acted on and it was taking a sum of nothing. `geom_bar()` needs to have `stat = "identity"` because it matches the height of the bars to the values in the data, which means that the bars in the bar graph weren't matched to the data.
+
+
+### QUESTION 4. After correcting the errors in the previous question, rewrite the code to produce the exact same output for both variables (sex and year), but **do not use a function** this time. Then, briefly answer the following questions: What differences do you notice between using a function and not using a function for this task? Which approach do you prefer and why? There are no right or wrong answers to these two questions; we are interested in what you learned and your thoughts on each approach.
+
+```{r}
+babynames %>% 
+  group_by(year) %>% 
+  summarize(total_births = sum(n)) %>% 
+  ggplot(aes(
+    x = year, y = total_births)) +
+  geom_bar(stat = "identity") +
+    scale_y_continuous(labels = scales::comma) +
+    theme_minimal()
+
+babynames %>% 
+  group_by(sex) %>% 
+  summarize(total_births = sum(n)) %>% 
+  ggplot(aes(
+    x = sex, y = total_births)) +
+  geom_bar(stat = "identity") +
+    scale_y_continuous(labels = scales::comma) +
+    theme_minimal()
+```
+While writing a function is more complicated, it is able to perform operations on two variables at once. For the function, I had to use curly brackets to look deep within the columns whereas with just ggplot I called on each column separately. I definitely prefer writing code without functions because it is far more intuitive for me having learned ggplot() first but I can see the advantages to using functions because of its efficiency. 
+
+## Session info
+
+```{r session-info}
+sessioninfo::session_info()
+```

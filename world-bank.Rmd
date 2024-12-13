@@ -1,0 +1,290 @@
+---
+title: "HW5 Part 2: Working with functions and tidyr with social science data"
+author: "Sophie Ennis"
+output: github_document
+---
+## Overview
+
+The World Bank publishes extensive socioeconomic data on countries and economies worldwide. In the `data_world_bank` folder included in this assignment, there are all the World Bank’s `csv` data files with economic indicators for each country (https://data.worldbank.org/indicator). Each `csv` file contains data on a given country economy's data.
+
+Your tasks:
+
+1. Write a function that imports a data file and renames some of the columns. Then call the function to import all files.
+2. Tidy the imported data.
+3. Analyze a selection of the data.
+
+Below are details for each of these tasks.
+
+
+## Load necessary libraries 
+
+```{r}
+library(tidyverse)
+```
+
+
+## Task 1
+
+#### Write a function that imports the data files and renames columns
+
+Your function should import a SINGLE data file and have one single argument: the file path to the data file. Given this path (when you use the function, pass a relative path), the function should import the data, rename a few variables, and return the renamed data as output.
+
+Your function should rename the following four variables "Country Name", "Country Code", "Indicator Name", "Indicator Code" as `country`, `country_code`, `indicator`, `indicator_code`. Note the original variables use non-syntactic names.
+
+Your function must have documentation (see slides for examples).
+
+Tips: 
+
+* First, write code to import one file without a function (refer to lecture on importing/exporting data for more) 
+* Inspect a few different `csv` files to familiarize yourself with the data and adjust your code accordingly: when you import the data you want to skip or drop problematic rows and columns, for example the first few rows and column 67 (you can refer to it as `...67`)
+* Once you are sure the code works correctly, put it into a function; see above on what the function is expected to do
+* Add documentation to your function (refer to the slides for examples)
+
+```{r import-function}
+library(readr)
+read_csv(file = "data_world_bank/API_ABW_DS2_en_csv_v2_4346306.csv")
+
+read_csv(file = "data_world_bank/API_AFG_DS2_en_csv_v2_4343152.csv")
+```
+
+```{r}
+read_rename <- function(df) {
+  # Reads a single file and renames its columns
+  # Args:
+    # df(tibble): of input data
+  # Returns: 
+    # data from file with renamed columns
+  data <- read_csv(file = df, skip = 4)
+    if ("...67" %in% colnames(data)) {
+    data_clean <- data %>% select(-"...67")
+  }
+  renamed_data <- data_clean %>% 
+    rename(
+           country = `Country Name`,
+           country_code = `Country Code`,
+           indicator = `Indicator Name`,
+           indicator_code = `Indicator Code`
+           )
+  return(renamed_data)
+}
+read_rename("data_world_bank/API_ABW_DS2_en_csv_v2_4346306.csv")
+```
+
+
+#### Call the function to import all data files 
+
+Once you are sure your function works as expected to import one SINGLE data file, use it to import ALL data files. To do so:
+
+* First, create a list that stores the names of all data files using the `dir()` function, with the following three arguments (type `help("dir")` in your console for more info about this function): 
+
+   * `path`: use a relative path (shorter, relative to your working directory) rather than an absolute path (longer, more prone to errors)
+   * `pattern`: use a simple regular expression pattern that matches the `csv` extension of all your files (for example `"csv$"` for more on this topic see the regular expression lecture)
+   * `full.names`: set this to `TRUE`
+   
+* Second, import all data files using your function. Demonstrate how to do this in two ways: using a `for loop` and using the most appropriate `map` function. Note that since there are several files, the import process might take a while, especially when using the loop (up to 2-3 minutes, depending on your machine). 
+
+* Ensure that your final result is a single dataframe (both when using a `for loop` and the `map` function), not a list or any other data structure. Print the first few rows of the final dataframe.
+
+```{r get-economies}
+# your code to create a list with the names of all data files to import; do not print the entire list in your submitted homework (printing only the first few names is enough)
+all_data <- dir(
+  path = "data_world_bank/", pattern = "API_",
+           full.names = TRUE)
+head(all_data)
+```
+
+```{r import-loop}
+# your code to import all data files using a for loop
+all_renamed_data <- vector("list", length = length(all_data))
+for (i in seq_along(all_data)) {
+  all_renamed_data[[i]] <- read_rename(all_data[[i]])
+}
+combined_data <- bind_rows(all_renamed_data)
+tail(combined_data)
+head(combined_data)
+nrow(combined_data)
+is.data.frame(combined_data)
+```
+
+```{r import-map}
+# your code to import all data files using map
+library(purrr)
+
+map_df(all_data, read_rename)
+
+```
+
+
+## Task 2 
+
+Tidy the imported data using the principles of tidy data: each variable must have its own column, each observation must have its own row, each value must have its own cell. 
+
+Before writing any code, take some time to envision how you want your data to look like once tidy. In a few sentences, explain what you did and why the resulting data frame is tidy.
+
+```{r}
+tidy_data <- combined_data %>% 
+  pivot_longer(
+    cols = starts_with("19")|starts_with("20"),
+    names_to = "year",
+    values_to = "value",
+    names_transform = list(year = as.integer)
+  ) %>% 
+  pivot_wider(
+    id_cols = c(country, country_code, year),
+    names_from = indicator,
+    values_from = value
+  )
+head(tidy_data)
+```
+The years were all columns and the indicator codes were all observations in one column. I created one column for the years so that each observation had its own row within a column. I did this by using `pivot_longer()` and allocating all of the columns that started with 19 or 20, as the years in the dataset are the 1900s-2000s, to one column named year. I then created a column for each of the indicator types, dropping the indicator type column, so that each variable had its own column. I did this by using `id_cols` as an argument in `pivot_wider()` to specify which columns should be kept as identifiers and not put into multiple columns.
+
+## Task 3
+
+After importing the data, write a brief report (one to two paragraphs) analyzing the relationship between at least two variables of your choice from the dataset.
+
+Produce at least one graph that illustrates the relationship between these variables. Ensure the graph has properly labeled axes, an informative title, and any other elements needed for clarity.
+
+Compute and report some descriptive statistics for the variables (e.g., mean, standard deviation, count, etc.).
+
+If the variables require data wrangling (e.g., aggregation, recoding, etc.) before plotting, please include the relevant code for these steps.
+
+To familiarize yourself with the World Bank indicators, you may find the data documentation helpful: https://data.worldbank.org/indicator
+
+
+```{r}
+tidy_data <- tidy_data %>% 
+  filter(!is.na(`Lifetime risk of maternal death (%)`)) %>% 
+  mutate(
+    maternal_death = case_when(
+      `Lifetime risk of maternal death (%)` > 5.0 ~ "high",
+      `Lifetime risk of maternal death (%)` >= 1.0 & 
+      `Lifetime risk of maternal death (%)` <= 5.0 ~ "medium",
+      `Lifetime risk of maternal death (%)` < 1.0 ~ "low",
+      TRUE ~ NA_character_
+    )
+  ) 
+
+avg_maternal_death <- tidy_data %>%
+  group_by(maternal_death) %>%
+  summarize(
+    avg_maternal_death = mean(`Lifetime risk of maternal death (%)`, na.rm = TRUE)) %>% 
+    arrange(desc(avg_maternal_death))
+avg_maternal_death
+```
+
+```{r}
+tidy_data <- tidy_data %>% 
+  filter(!is.na(`Fertility rate, total (births per woman)`)) %>% 
+  mutate(
+    fertility_rate = case_when(
+      `Fertility rate, total (births per woman)` > 5.0 ~ "high",
+      `Fertility rate, total (births per woman)` >= 3.0 & 
+      `Fertility rate, total (births per woman)` <= 5.0 ~ "medium",
+      `Fertility rate, total (births per woman)` < 3.0 ~ "low",
+      TRUE ~ NA_character_
+    )
+  )
+
+avg_fertility_rate <- tidy_data %>%
+  group_by(fertility_rate) %>%
+  summarize(
+    avg_fertility_rate = mean(`Fertility rate, total (births per woman)`, na.rm = TRUE)) %>% 
+    arrange(desc(avg_fertility_rate))
+avg_fertility_rate
+```
+```{r}
+tidy_data$maternal_death <- factor(tidy_data$maternal_death, levels = c("high", "medium", "low"))
+tidy_data$fertility_rate <- factor(tidy_data$fertility_rate, levels = c("high", "medium", "low"))
+
+levels(tidy_data$maternal_death)
+levels(tidy_data$fertility_rate)
+
+ggplot(data = tidy_data,
+       mapping = aes(
+         x = maternal_death,
+         fill = fertility_rate)) + 
+  geom_bar(position = "stack") +
+  labs(title = "Fertility Rate and Maternal Mortality Risk",
+       x = "Lifetime Maternal Mortality Risk",
+       y = "Cases")
+```
+```{r}
+tidy_data_subset <- tidy_data %>% 
+  filter(country %in% c("United States", "India", "Niger"))
+ggplot(data = tidy_data_subset,
+       mapping = aes(
+         x = maternal_death,
+         fill = fertility_rate)) + 
+  geom_bar(position = "stack") +
+  facet_wrap(~ country) +
+  labs(title = "Fertility Rate and Maternal Mortality Risk",
+       x = "Lifetime Maternal Mortality Risk",
+       y = "Cases")
+```
+```{r}
+tidy_data_subset <- tidy_data %>% 
+  filter(country %in% c("United States", "India", "Niger"))
+
+ggplot(data = tidy_data_subset,
+       mapping = aes(
+         x = maternal_death,
+         y = `Population, total`,
+         fill = fertility_rate)) + 
+  geom_col(position = "stack") +
+  facet_wrap(~ country) +
+  labs(title = "Fertility Rate and Maternal Mortality Risk",
+       x = "Lifetime Maternal Mortality Risk",
+       y = "Total Population")
+```
+```{r}
+library(scales)
+tidy_data_subset <- tidy_data %>% 
+  filter(country %in% c("United States", "India", "Niger")) %>% 
+  group_by(country, maternal_death, fertility_rate) %>%
+  summarize(avg_births_attended = mean(`Births attended by skilled health staff (% of total)`,
+                                       na.rm = TRUE), .groups = 'drop')
+
+ggplot(data = tidy_data_subset,
+       mapping = aes(
+         x = maternal_death,
+         y = avg_births_attended,
+         fill = fertility_rate)) + 
+  geom_col(position = "stack") +
+  facet_wrap(~ country) +
+  scale_y_continuous(labels = percent_format(scale = 1)) +
+  labs(title = "Fertility Rate and Maternal Mortality Risk",
+       x = "Lifetime Maternal Mortality Risk",
+       y = "Average births attended by skilled health staff (% of total)")
+```
+
+I wanted to assess if lifetime maternal mortality risk was associated with fertility rates. I hypothesized that countries with higher fertility rates would be associated with higher maternal mortality risk, because the act of birthing children can be dangerous in itself, particularly when compounded by the countries that have higher fertility rates typically being more developing in nature. I generated four graphs to illustrate this. 
+
+The first bar graph depicts the relationship between maternal mortality risk and fertility rate for all countries. The second bar graph depicts the same relationship but for three types of countries - the United States, a developed country with a low fertility rate, India, a developed country with a medium fertility rate, and Niger, a developing country with a high fertility rate. These countries differ based on the medical advancements they have to save mothers' lives when they are at risk - while the United States and India offer advanced medical treatments, Niger does not have as many resources to advance healthcare. This makes Niger a country where the risk of maternal mortality is higher than these more developed nations.
+
+The third graph indicates the differences between these countries in population. While India has a very large population, because of its medical advancements, the majority of its maternal mortality risk can be classified as low, including low and medium classifications of fertility rate. Niger has a nearly negligible population in comparison with India and the United States. That said, Niger's high and medium maternal mortality risk, despite its high fertility rates, is at least not widespread, affecting a very small population. The United States, which is entirely classified as having a low maternal mortality risk, is also classified as having a low fertility rate. India, having a higher fertility rate than the United States, has almost an equal amount of cases that are medium in their maternal mortality risk to the entirety of the United States' low maternal mortality risk, revealing not only how large the population is, but how India is doing a very good job mitigating their medium fertility rate through healthcare interventions. The fourth graph shows that out of these countries, the United States is the most likely to have mothers' births be monitored by skilled health staff. India and Niger are not too far behind in their own averages, but this can show a few things: the United States may be the furthest ahead in safe deliveries which thus regulate maternal mortality, or the United States could just be leading in the medicalization of birth. Deliveries are much more likely to happen in hospitals in the United States, whereas in other countries like Niger, either due to different norms or resources, home births happen more frequently. 
+
+I conclude that my hypothesis is supported by the data: high maternal mortality risk is associated with high fertility rate. This measure must account for population size as well as availability of healthcare.
+
+
+## Session info
+
+```{r session-info}
+sessioninfo::session_info()
+```
+
+
+## Reflections
+
+Write a few sentences reflecting on what was difficult or easy about this homework assignment (evaluate both parts of this assigment: debugging and word-bank data). Discuss the problems you encountered and how you solved them, and new concepts or techniques you learned.
+
+Please, list the first and last names of any collaborators you worked with to complete this assignment. Additionally, specify the resources you used, including how you utilized them. If you used AI, please explain how (be specific!). 
+
+Make sure to check our policy for [Plagiarism and Academic integrity](https://computing-soc-sci.netlify.app/faq/course-expectations/#plagiarism-and-academic-integrity) including the use of AI. In short: do not copy large chunks of code from the internet or generated by AI (that is plagiarism and we will penalize it!), but using these tools to debug programs or overcome small problems is acceptable, just make sure to explain how you use them (see above).
+
+Finding and fixing the bugs in the `fix-errors.Rmd` Assignment went pretty smoothly, and I found that working with `ggplot()` is a lot more intuitive for me than writing functions. This difficulty writing functions posed a slight challenge in the `world-bank.Rmd` Assignment for Task 1, but Rosa and I were able to get through it. I found writing the documentation for the function a little challenging but it really challenged me to understand what the function I was writing was doing. I found it slightly challenging to decide what and how to tidy about the data, but once I played around with how many lines we should skip, we found the right answer. I got TA Zach's help with writing the for loop in terms of what to pre-allocate, but the map function was more straightforward. Professor Nardin's comments on Ed really helped me figure out what to do for Task 2 because after performing `pivot_longer()` I was struggling with what to do next. Task 3 was simultaneously frustrating and fun. I kept choosing variables that were mostly comprised of `NA` values so the `summarize()` function kept getting confused even when I dropped the `NA` values. I eventually found variables of interest that had data present for most of the rows, and from there, I recoded them using my knowledge of `case_when()` from previous homework assignments pretty easily and then was able to generate a bunch of graphs. My interpretation of the data was definitely affected by my global knowledge, but I think I did a pretty good job analyzing the graphs.
+
+- I worked with Rosa Lander on this assignment.
+- I used Professor Nardin's advice posted on Ed on how to use `id_cols` to tidy the data for Task 2.
+- Zach's office hours were especially helpful for debugging my code, particularly for Tasks 1 and 2.
+- I relied on the slides and the provided function documentation.
+- I used ChatGPT to debug Task 3, which recommended I transform the variables I was using into factors for better visualization.
